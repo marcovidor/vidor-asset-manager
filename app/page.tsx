@@ -129,12 +129,31 @@ export default function App() {
 
   // Auth
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { window.location.href = '/login'; return }
-      fetch('/api/auth/profile').then(r => r.json()).then(p => {
+      // Fetch profile directly from Supabase (no server API needed)
+      const { data: p } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
+      if (!p) {
+        // Profile missing -- create it
+        const { data: newP } = await supabase
+          .from('user_profiles')
+          .upsert({
+            id: session.user.id,
+            email: session.user.email!,
+            full_name: session.user.user_metadata?.full_name || session.user.email!,
+            role: 'viewer',
+          })
+          .select()
+          .single()
+        setProfile(newP)
+      } else {
         setProfile(p)
-        setAuthLoading(false)
-      })
+      }
+      setAuthLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') window.location.href = '/login'
