@@ -14,6 +14,7 @@ export async function middleware(request: NextRequest) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
             request.cookies.set(name, value)
+            response = NextResponse.next({ request })
             response.cookies.set(name, value, options)
           })
         },
@@ -21,17 +22,22 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Public routes
-  if (pathname.startsWith('/login') || pathname.startsWith('/auth')) {
-    if (session) return NextResponse.redirect(new URL('/', request.url))
+  // Always allow auth routes
+  if (pathname.startsWith('/auth') || pathname.startsWith('/api')) {
     return response
   }
 
-  // Everything else requires auth
-  if (!session) {
+  // Login page -- redirect to home if already logged in
+  if (pathname === '/login') {
+    if (user) return NextResponse.redirect(new URL('/', request.url))
+    return response
+  }
+
+  // All other pages require auth
+  if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -39,5 +45,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
