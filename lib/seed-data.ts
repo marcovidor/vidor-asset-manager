@@ -406,6 +406,6 @@ export const SEED_ASSETS = [
   {"asset_id": "DOM023", "category": "DOMAINS", "category_label": "Domains", "make": "—", "model": "nightfriendspodcast.org", "description": "Podcast alt TLD", "serial": "—", "status": "active", "condition": "good"},
   {"asset_id": "DOM024", "category": "DOMAINS", "category_label": "Domains", "make": "—", "model": "julievidor.com", "description": "Wife Julie Vidor personal site", "serial": "—", "status": "active", "condition": "good"},
   {"asset_id": "DOM025", "category": "DOMAINS", "category_label": "Domains", "make": "—", "model": "aurelyolk.com", "description": "Aurelyolk egg character — based on Aurelio (Marco)", "serial": "—", "status": "concept", "condition": "good"},
-  {"asset_id": "DOM026", "category": "DOMAINS", "category_label": "Domains", "make": "—", "model": "alyxbraun.com", "description": "Daughter Alyx Braun personal site", "serial": "—", "status": "active", "condition": "good"},
+  {"asset_id": "DOM026", "category": "DOMAINS", "category_label": "Domains", "make": "—", "model": "alyxbraun.com", "description": "Alyx Braun personal site", "serial": "—", "status": "active", "condition": "good"},
   {"asset_id": "DOM027", "category": "DOMAINS", "category_label": "Domains", "make": "—", "model": "mrcvdr.com", "description": "Short brand URL", "serial": "—", "status": "active", "condition": "good"},
 ]
