@@ -80,14 +80,16 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 
 const CONDITION_OPTS = ['excellent','good','fair','poor','damaged']
 
-function Badge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, color: '#888', bg: 'rgba(136,136,136,.1)', border: 'rgba(136,136,136,.2)' }
+function Badge({ status }: { status: string | undefined }) {
+  const s = status || 'active'
+  const cfg = STATUS_CONFIG[s] || { label: s, color: '#888', bg: 'rgba(136,136,136,.1)', border: 'rgba(136,136,136,.2)' }
   return (
     <span style={{ fontFamily:'IBM Plex Mono,monospace', fontSize:10, letterSpacing:'.06em', padding:'2px 7px', borderRadius:2, fontWeight:500, textTransform:'uppercase' as const, display:'inline-block', whiteSpace:'nowrap' as const, color:cfg.color, background:cfg.bg, border:`1px solid ${cfg.border}` }}>{cfg.label}</span>
   )
 }
 
-function RoleBadge({ role }: { role: UserRole }) {
+function RoleBadge({ role }: { role: UserRole | undefined }) {
+  if (!role) return null
   const cfg: Record<UserRole, { label: string; color: string }> = {
     super_admin: { label:'Super Admin', color:'#ffab00' },
     admin:       { label:'Admin',       color:'#2979ff' },
