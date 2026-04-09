@@ -22,7 +22,18 @@ export async function GET(request: Request) {
         },
       }
     )
-    await supabase.auth.exchangeCodeForSession(code)
+
+    const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code)
+
+    // Create profile if it doesn't exist
+    if (session && !error) {
+      await supabase.from('user_profiles').upsert({
+        id: session.user.id,
+        email: session.user.email!,
+        full_name: session.user.user_metadata?.full_name || session.user.email!,
+        role: 'viewer',
+      }, { onConflict: 'id', ignoreDuplicates: true })
+    }
   }
 
   return NextResponse.redirect(`${origin}/`)
