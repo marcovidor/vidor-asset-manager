@@ -279,25 +279,6 @@ export default function App() {
     const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'VidorMedia_Assets.csv'; link.click()
   }
 
-  const printQR = (asset: Asset) => {
-    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-    const url = `${window.location.origin}/?asset=${encodeURIComponent(asset.asset_id)}`
-    const win = window.open('', '_blank', 'width=400,height=500')
-    if (!win) return
-    // Build DOM instead of document.write to avoid XSS
-    win.document.title = `QR - ${asset.asset_id}`
-    win.document.head.innerHTML = `<style>body{font-family:monospace;text-align:center;padding:30px;} h2{font-size:14px;margin:10px 0 4px;} p{font-size:11px;color:#666;margin:2px;}</style>`
-    win.document.body.innerHTML = `<div id="qr"></div><h2>${esc(asset.asset_id)} &mdash; ${esc(asset.make)} ${esc(asset.model)}</h2><p>${esc(asset.category_label)}</p>${asset.serial!=='TBD'?`<p>S/N: ${esc(asset.serial)}</p>`:''}`
-    const script = win.document.createElement('script')
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
-    script.onload = () => {
-      // @ts-expect-error QRCode loaded from CDN
-      new win.QRCode(win.document.getElementById('qr'), { text: url, width: 200, height: 200 })
-      setTimeout(() => win.print(), 800)
-    }
-    win.document.head.appendChild(script)
-  }
-
   const catCounts = assets.reduce<Record<string,number>>((acc,a) => { acc[a.category]=(acc[a.category]||0)+1; return acc }, {})
   const effectivePerPage = perPage === 0 ? filtered.length : perPage
   const totalPages = Math.max(1, Math.ceil(filtered.length / effectivePerPage))
@@ -475,7 +456,6 @@ export default function App() {
                 <div className={styles.drawerModel}>{selectedAsset.model}</div>
                 <div className={styles.drawerBadgeRow}>
                   <Badge status={selectedAsset.status} />
-                  {canEdit(profile.role) && <button className={styles.btn} style={{fontSize:10,padding:'2px 8px'}} onClick={()=>printQR(selectedAsset)}>QR Code</button>}
                   {canEdit(profile.role) && <button className={styles.btn} style={{fontSize:10,padding:'2px 8px'}} onClick={()=>{setDuplicateAsset(selectedAsset);setShowAdd(true)}}>Duplicate</button>}
                   {canDelete(profile.role) && <button className={styles.btnDanger} onClick={deleteAsset}>Delete</button>}
                 </div>
@@ -544,25 +524,6 @@ function Btn({ onClick, primary, children, disabled }: { onClick:()=>void; prima
   return <button onClick={onClick} disabled={disabled} className={primary?styles.btnPrimary:styles.btn}>{children}</button>
 }
 
-
-// ---- INLINE QR CODE (canvas-based) ----
-function QRCode({ value, size = 100 }: { value: string; size?: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    if (!value || !canvasRef.current) return
-    import('qrcode').then(QR => {
-      QR.toCanvas(canvasRef.current!, value, {
-        width: size,
-        margin: 1,
-        color: { dark: '#ededed', light: '#1a1a1a' },
-      })
-    })
-  }, [value, size])
-
-  return <canvas ref={canvasRef} width={size} height={size} style={{borderRadius:4,display:'block'}} />
-}
-
 // ---- DETAILS TAB ----
 function DetailsTab({ asset, onSave, saving, onPhotoClick, canEdit }: { asset:Asset; onSave:(p:Partial<Asset>)=>void; saving:boolean; onPhotoClick:()=>void; canEdit:boolean }) {
   const [name, setName] = useState(asset.model||'')
@@ -586,21 +547,12 @@ function DetailsTab({ asset, onSave, saving, onPhotoClick, canEdit }: { asset:As
   }, [asset.id])
 
   const depr = calcDepreciation(asset.purchase_price, asset.purchase_date)
-  const qrUrl = typeof window !== 'undefined' ? `${window.location.origin}/?asset=${encodeURIComponent(asset.asset_id)}` : ''
-
   return (
     <div>
-      <div style={{display:'grid', gridTemplateColumns:'1fr 120px', gap:8, marginBottom:20}}>
-        <div className={styles.photoArea} onClick={canEdit?onPhotoClick:undefined}
-          style={{cursor:canEdit?'pointer':'default', marginBottom:0, minHeight:120}}>
-          {asset.photo_url
-            ? <img src={asset.photo_url} alt="" style={{width:'100%',height:'100%',minHeight:120,objectFit:'cover'}} />
-            : <span className={styles.photoHint}>{canEdit?'+ ADD PHOTO':'No photo'}</span>}
-        </div>
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--color-bg-3)',border:'1px solid var(--color-border-2)',borderRadius:'var(--radius-md)',padding:8,gap:6}}>
-          <QRCode value={qrUrl} size={96} />
-          <span style={{fontFamily:'var(--font-mono)',fontSize:8,color:'var(--color-text-muted)',letterSpacing:'.04em',textAlign:'center'}}>{asset.asset_id}</span>
-        </div>
+      <div className={styles.photoArea} onClick={canEdit?onPhotoClick:undefined} style={{cursor:canEdit?'pointer':'default'}}>
+        {asset.photo_url
+          ? <img src={asset.photo_url} alt="" style={{width:'100%',height:180,objectFit:'cover'}} />
+          : <span className={styles.photoHint}>{canEdit?'+ ADD PHOTO':'No photo'}</span>}
       </div>
       <div className={styles.drawerDesc}>{asset.description}</div>
 

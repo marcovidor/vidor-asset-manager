@@ -448,6 +448,8 @@
 .badgeTeal     { color: var(--color-teal);      background: var(--color-teal-bg);     border: 1px solid var(--color-teal-bdr); }
 .badgeMuted    { color: var(--color-text-muted); background: rgba(85,85,85,.1);       border: 1px solid rgba(85,85,85,.2); }
 .badgeDim      { color: var(--color-text-disabled); background: rgba(68,68,68,.08);   border: 1px solid var(--color-border); }
+.badgeDanger   { color: var(--color-danger);  background: var(--color-danger-bg);  border: 1px solid var(--color-danger-bdr); }
+.badgeWarning  { color: var(--color-warning); background: var(--color-warning-bg); border: 1px solid var(--color-warning-bdr); }
 
 .roleBadgeSuperAdmin { font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; padding: 2px 6px; border-radius: 2px; color: var(--color-warning);  border: 1px solid rgba(255,171,0,.25); background: rgba(255,171,0,.1); }
 .roleBadgeAdmin      { font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; padding: 2px 6px; border-radius: 2px; color: var(--color-info);     border: 1px solid var(--color-info-bdr); background: var(--color-info-bg); }
