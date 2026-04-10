@@ -140,10 +140,6 @@ export default function App() {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
   const [drawerTab, setDrawerTab] = useState<'details'|'checkout'|'maintenance'|'history'>('details')
   const [showAdd, setShowAdd] = useState(false)
-  const [showAdmin, setShowAdmin] = useState(false)
-  const [showSchool, setShowSchool] = useState(false)
-  const [showBulkSerial, setShowBulkSerial] = useState(false)
-  const [showCSVImport, setShowCSVImport] = useState(false)
   const [duplicateAsset, setDuplicateAsset] = useState<Asset | null>(null)
   const [activeOrg, setActiveOrg] = useState<{id:string;name:string;theme:Record<string,string>}|null>(null)
   const [allOrgs, setAllOrgs] = useState<{id:string;name:string;theme:Record<string,string>}[]>([])
@@ -363,12 +359,10 @@ export default function App() {
         </div>
 
         {profile && canManageUsers(profile.role) && (
-          <div className={styles.sidebarAdminWrap} style={{ display:'flex', flexDirection:'column', gap:6 }}>
-            <button className={styles.sidebarAdminBtn} onClick={()=>setShowAdmin(true)}>User Management</button>
-            <button className={styles.sidebarAdminBtn} onClick={()=>setShowSchool(true)}>Onboard School</button>
-            <button className={styles.sidebarAdminBtn} onClick={()=>setShowBulkSerial(true)} style={{ color: tbdCount > 0 ? 'var(--color-warning)' : undefined }}>
-              Bulk Serials {tbdCount > 0 ? `(${tbdCount})` : ''}
-            </button>
+          <div className={styles.sidebarAdminWrap}>
+            <a href="/admin" style={{ display:'block', width:'100%', padding:'6px 0', background:'transparent', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-sm)', fontSize:11, color:'var(--color-text-tertiary)', cursor:'pointer', fontFamily:'var(--font-mono)', letterSpacing:'.06em', textAlign:'center', textDecoration:'none', transition:'all .15s' }}>
+              ⚙ Admin{tbdCount > 0 ? ` · ${tbdCount} TBD` : ''}
+            </a>
           </div>
         )}
       </nav>
@@ -389,9 +383,6 @@ export default function App() {
             ))}
           </select>
           <div className={styles.topbarSpacer} />
-          {canEdit(profile?.role) && <button className={styles.btn} onClick={()=>setShowCSVImport(true)}>Import CSV</button>}
-          {canEdit(profile?.role) && <button className={styles.btn} onClick={exportCSV}>Export CSV</button>}
-          <button className={styles.btn} onClick={()=>window.print()}>Print</button>
           {canEdit(profile?.role) && <button className={styles.btnPrimary} onClick={()=>setShowAdd(true)}>+ Add Asset</button>}
         </div>
 
@@ -500,21 +491,6 @@ export default function App() {
           await fetch('/api/assets',{method:'POST',headers:hdrs,body:JSON.stringify(data)})
             await fetchAssets(activeOrg?.id); setShowAdd(false); setDuplicateAsset(null); showToast('Asset added')
           }} />
-      )}
-      {showAdmin && profile && canManageUsers(profile.role) && <UserManagementModal onClose={()=>setShowAdmin(false)} />}
-      {showSchool && profile && canManageUsers(profile.role) && <SchoolModal onClose={()=>setShowSchool(false)} />}
-      {showBulkSerial && profile && canEdit(profile.role) && (
-        <BulkSerialModal assets={assets.filter(a=>a.serial==='TBD'||!a.serial)} onClose={()=>setShowBulkSerial(false)}
-          onSave={async(id,serial)=>{
-            await fetch(`/api/assets/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({serial})})
-            setAssets(prev=>prev.map(a=>a.id===id?{...a,serial}:a))
-          }} />
-      )}
-      {showCSVImport && profile && canEdit(profile.role) && (
-        <CSVImportModal
-          orgId={activeOrg?.id||'00000000-0000-0000-0000-000000000001'}
-          onClose={()=>setShowCSVImport(false)}
-          onImported={()=>{ fetchAssets(activeOrg?.id); showToast('Assets imported') }} />
       )}
       {toast && <div className={styles.toast}>{toast}</div>}
     </div>
