@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { supabase } from './auth'
 
 export type OrgTheme = {
@@ -8,6 +7,14 @@ export type OrgTheme = {
   bgSidebar?: string
   textPrimary?: string
   logoUrl?: string
+}
+
+const DEFAULTS: OrgTheme = {
+  accent: '#ededed',
+  accentFg: '#000000',
+  bg: '#0a0a0a',
+  bgSidebar: '#111111',
+  textPrimary: '#f0f0f0',
 }
 
 export async function fetchOrgTheme(orgId: string): Promise<OrgTheme | null> {
@@ -20,17 +27,17 @@ export async function fetchOrgTheme(orgId: string): Promise<OrgTheme | null> {
   return { ...data.theme, logoUrl: data.logo_url }
 }
 
-export function applyTheme(theme: OrgTheme) {
-  const root = document.documentElement
-  if (theme.accent)      root.style.setProperty('--color-accent', theme.accent)
-  if (theme.accentFg)    root.style.setProperty('--color-accent-fg', theme.accentFg)
-  if (theme.bg)          root.style.setProperty('--color-bg', theme.bg)
-  if (theme.bgSidebar)   root.style.setProperty('--color-bg-1', theme.bgSidebar)
-  if (theme.textPrimary) root.style.setProperty('--color-text-primary', theme.textPrimary)
+export function applyTheme(theme: OrgTheme | null) {
+  const t = { ...DEFAULTS, ...theme }
+  const r = document.documentElement
+  if (t.accent)      r.style.setProperty('--color-accent', t.accent)
+  if (t.accentFg)    r.style.setProperty('--color-accent-fg', t.accentFg)
+  if (t.bg)          r.style.setProperty('--color-bg', t.bg)
+  if (t.bgSidebar) { r.style.setProperty('--color-bg-1', t.bgSidebar); r.style.setProperty('--color-bg-2', t.bgSidebar) }
+  if (t.textPrimary) r.style.setProperty('--color-text-primary', t.textPrimary)
 }
 
 export function resetTheme() {
-  const root = document.documentElement
-  ;['--color-accent','--color-accent-fg','--color-bg','--color-bg-1','--color-text-primary']
-    .forEach(v => root.style.removeProperty(v))
+  ;['--color-accent','--color-accent-fg','--color-bg','--color-bg-1','--color-bg-2','--color-text-primary']
+    .forEach(v => document.documentElement.style.removeProperty(v))
 }
