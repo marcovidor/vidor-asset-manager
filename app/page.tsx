@@ -43,13 +43,48 @@ const CAT_LABELS: Record<string, string> = {
   COMPUTERS_AND_DISPLAYS:'Computers & Displays',SOFTWARE:'Software',DOMAINS:'Domains'
 }
 const BADGE_MAP: Record<string, string> = {
-  active:styles.badgeActive, licensed:styles.badgeLicensed, concept:styles.badgeConcept,
-  in_development:styles.badgeTeal, checked_out:styles.badgeWarning,
-  legacy:styles.badgeMuted, parked:styles.badgeDim, active_dns_only:styles.badgeDim,
+  active:         styles.badgeActive,
+  available:      styles.badgeActive,
+  licensed:       styles.badgeLicensed,
+  subscription:   styles.badgeLicensed,
+  in_use:         styles.badgeTeal,
+  reserved:       styles.badgeTeal,
+  on_loan:        styles.badgeWarning,
+  checked_out:    styles.badgeWarning,
+  needs_repair:   styles.badgeDanger,
+  in_repair:      styles.badgeWarning,
+  expired:        styles.badgeDanger,
+  stolen:         styles.badgeDanger,
+  lost:           styles.badgeDanger,
+  retired:        styles.badgeMuted,
+  legacy:         styles.badgeMuted,
+  active_dns_only:styles.badgeDim,
+  parked:         styles.badgeDim,
 }
 const BADGE_LABELS: Record<string, string> = {
-  active:'Active', licensed:'Licensed', concept:'Concept', in_development:'In dev',
-  checked_out:'Checked out', legacy:'Legacy', parked:'Parked', active_dns_only:'DNS only',
+  // Operational
+  active:       'Active',
+  checked_out:  'Checked Out',
+  in_use:       'In Use',
+  // Availability
+  available:    'Available',
+  reserved:     'Reserved',
+  on_loan:      'On Loan',
+  // Condition flags
+  needs_repair: 'Needs Repair',
+  in_repair:    'In Repair',
+  retired:      'Retired',
+  // Software / Licenses
+  licensed:     'Licensed',
+  subscription: 'Subscription',
+  expired:      'Expired',
+  // Domains
+  active_dns_only: 'DNS Only',
+  parked:       'Parked',
+  // Other
+  legacy:       'Legacy',
+  lost:         'Lost',
+  stolen:       'Stolen',
 }
 const ROLE_CLASS: Record<UserRole, string> = {
   super_admin:styles.roleBadgeSuperAdmin, admin:styles.roleBadgeAdmin, viewer:styles.roleBadgeViewer,
@@ -58,7 +93,14 @@ const ROLE_LABEL: Record<UserRole, string> = {
   super_admin:'Super Admin', admin:'Admin', viewer:'Viewer',
 }
 const CONDITION_OPTS = ['excellent','good','fair','poor','damaged']
-const STATUS_OPTS = ['active','legacy','licensed','parked','concept','in_development','checked_out']
+const STATUS_OPTS = [
+  { group: 'Operational',        values: ['active','checked_out','in_use','available','reserved','on_loan'] },
+  { group: 'Issues',             values: ['needs_repair','in_repair','lost','stolen'] },
+  { group: 'Software & Licenses',values: ['licensed','subscription','expired'] },
+  { group: 'Domains',            values: ['active_dns_only','parked'] },
+  { group: 'End of Life',        values: ['legacy','retired'] },
+]
+const STATUS_OPTS_FLAT = STATUS_OPTS.flatMap(g => g.values)
 const PER_PAGE_OPTS = [25, 50, 75, 100, 0] // 0 = All
 
 function Badge({ status }: { status?: string }) {
@@ -238,21 +280,22 @@ export default function App() {
   }
 
   const printQR = (asset: Asset) => {
-    const url = `${window.location.origin}/?asset=${asset.asset_id}`
+    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    const url = `${window.location.origin}/?asset=${encodeURIComponent(asset.asset_id)}`
     const win = window.open('', '_blank', 'width=400,height=500')
     if (!win) return
-    win.document.write(`
-      <html><head><title>QR - ${asset.asset_id}</title>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-      <style>body{font-family:monospace;text-align:center;padding:30px;} h2{font-size:14px;margin:10px 0 4px;} p{font-size:11px;color:#666;margin:2px;}</style>
-      </head><body>
-      <div id="qr"></div>
-      <h2>${asset.asset_id} &mdash; ${asset.make} ${asset.model}</h2>
-      <p>${asset.category_label}</p>
-      <p>${asset.serial !== 'TBD' ? 'S/N: ' + asset.serial : ''}</p>
-      <script>new QRCode(document.getElementById('qr'),{text:'${url}',width:200,height:200}); setTimeout(()=>window.print(),600)</script>
-      </body></html>`)
-    win.document.close()
+    // Build DOM instead of document.write to avoid XSS
+    win.document.title = `QR - ${asset.asset_id}`
+    win.document.head.innerHTML = `<style>body{font-family:monospace;text-align:center;padding:30px;} h2{font-size:14px;margin:10px 0 4px;} p{font-size:11px;color:#666;margin:2px;}</style>`
+    win.document.body.innerHTML = `<div id="qr"></div><h2>${esc(asset.asset_id)} &mdash; ${esc(asset.make)} ${esc(asset.model)}</h2><p>${esc(asset.category_label)}</p>${asset.serial!=='TBD'?`<p>S/N: ${esc(asset.serial)}</p>`:''}`
+    const script = win.document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
+    script.onload = () => {
+      // @ts-expect-error QRCode loaded from CDN
+      new win.QRCode(win.document.getElementById('qr'), { text: url, width: 200, height: 200 })
+      setTimeout(() => win.print(), 800)
+    }
+    win.document.head.appendChild(script)
   }
 
   const catCounts = assets.reduce<Record<string,number>>((acc,a) => { acc[a.category]=(acc[a.category]||0)+1; return acc }, {})
@@ -344,13 +387,12 @@ export default function App() {
           <input className={styles.searchInput} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search make, model, serial, description, ID..." />
           <select className={styles.statusSelect} value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
             <option value=''>All statuses</option>
-            <option value='active'>Active</option>
-            <option value='serial-tbd'>Serial TBD</option>
-            <option value='checked_out'>Checked out</option>
-            <option value='legacy'>Legacy</option>
-            <option value='licensed'>Licensed</option>
-            <option value='parked'>Parked</option>
-            <option value='concept'>Concept</option>
+            <option value='serial-tbd'>⚠ Serial TBD</option>
+            {STATUS_OPTS.map(group=>(
+              <optgroup key={group.group} label={group.group}>
+                {group.values.map(v=><option key={v} value={v}>{BADGE_LABELS[v]||v}</option>)}
+              </optgroup>
+            ))}
           </select>
           <div className={styles.topbarSpacer} />
           {canEdit(profile?.role) && <button className={styles.btn} onClick={()=>setShowCSVImport(true)}>Import CSV</button>}
@@ -502,6 +544,25 @@ function Btn({ onClick, primary, children, disabled }: { onClick:()=>void; prima
   return <button onClick={onClick} disabled={disabled} className={primary?styles.btnPrimary:styles.btn}>{children}</button>
 }
 
+
+// ---- INLINE QR CODE (canvas-based) ----
+function QRCode({ value, size = 100 }: { value: string; size?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    if (!value || !canvasRef.current) return
+    import('qrcode').then(QR => {
+      QR.toCanvas(canvasRef.current!, value, {
+        width: size,
+        margin: 1,
+        color: { dark: '#ededed', light: '#1a1a1a' },
+      })
+    })
+  }, [value, size])
+
+  return <canvas ref={canvasRef} width={size} height={size} style={{borderRadius:4,display:'block'}} />
+}
+
 // ---- DETAILS TAB ----
 function DetailsTab({ asset, onSave, saving, onPhotoClick, canEdit }: { asset:Asset; onSave:(p:Partial<Asset>)=>void; saving:boolean; onPhotoClick:()=>void; canEdit:boolean }) {
   const [name, setName] = useState(asset.model||'')
@@ -525,13 +586,21 @@ function DetailsTab({ asset, onSave, saving, onPhotoClick, canEdit }: { asset:As
   }, [asset.id])
 
   const depr = calcDepreciation(asset.purchase_price, asset.purchase_date)
+  const qrUrl = typeof window !== 'undefined' ? `${window.location.origin}/?asset=${encodeURIComponent(asset.asset_id)}` : ''
 
   return (
     <div>
-      <div className={styles.photoArea} onClick={canEdit?onPhotoClick:undefined} style={{cursor:canEdit?'pointer':'default'}}>
-        {asset.photo_url
-          ? <img src={asset.photo_url} alt="" style={{width:'100%',height:180,objectFit:'cover'}} />
-          : <span className={styles.photoHint}>{canEdit?'+ ADD PHOTO':'No photo'}</span>}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 120px', gap:8, marginBottom:20}}>
+        <div className={styles.photoArea} onClick={canEdit?onPhotoClick:undefined}
+          style={{cursor:canEdit?'pointer':'default', marginBottom:0, minHeight:120}}>
+          {asset.photo_url
+            ? <img src={asset.photo_url} alt="" style={{width:'100%',height:'100%',minHeight:120,objectFit:'cover'}} />
+            : <span className={styles.photoHint}>{canEdit?'+ ADD PHOTO':'No photo'}</span>}
+        </div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--color-bg-3)',border:'1px solid var(--color-border-2)',borderRadius:'var(--radius-md)',padding:8,gap:6}}>
+          <QRCode value={qrUrl} size={96} />
+          <span style={{fontFamily:'var(--font-mono)',fontSize:8,color:'var(--color-text-muted)',letterSpacing:'.04em',textAlign:'center'}}>{asset.asset_id}</span>
+        </div>
       </div>
       <div className={styles.drawerDesc}>{asset.description}</div>
 
@@ -545,7 +614,7 @@ function DetailsTab({ asset, onSave, saving, onPhotoClick, canEdit }: { asset:As
         </Field>
         <Field label="Status">
           <Sel value={status} onChange={setStatus} disabled={!canEdit}>
-            {STATUS_OPTS.map(s=><option key={s} value={s}>{BADGE_LABELS[s]||s}</option>)}
+            {STATUS_OPTS_FLAT.map(s=><option key={s} value={s}>{BADGE_LABELS[s]||s}</option>)}
           </Sel>
         </Field>
         <Field label="Serial / License"><Input value={serial} onChange={canEdit?setSerial:undefined} disabled={!canEdit} /></Field>
@@ -723,7 +792,15 @@ function AddModal({ onClose, onAdd, prefill }: { onClose:()=>void; onAdd:(data:R
         <div className={styles.modalBody}>
           <div className={styles.fieldGrid}>
             <Field label="Category"><Sel value={cat} onChange={setCat}>{allCats.map(c=><option key={c} value={c}>{CAT_LABELS[c]||c}</option>)}</Sel></Field>
-            <Field label="Status"><Sel value={status} onChange={setStatus}>{STATUS_OPTS.map(s=><option key={s} value={s}>{BADGE_LABELS[s]||s}</option>)}</Sel></Field>
+            <Field label="Status">
+              <select value={status} onChange={e=>setStatus(e.target.value)} disabled={!canEdit} className={styles.fieldSelect}>
+                {STATUS_OPTS.map(group=>(
+                  <optgroup key={group.group} label={group.group}>
+                    {group.values.map(v=><option key={v} value={v}>{BADGE_LABELS[v]||v}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </Field>
             <Field label="Make / Brand"><Input value={make} onChange={setMake} placeholder="e.g. Sony" /></Field>
             <Field label="Model"><Input value={model} onChange={setModel} placeholder="e.g. FX3" /></Field>
             <Field label="Serial"><Input value={serial} onChange={setSerial} /></Field>
