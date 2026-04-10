@@ -1,0 +1,72 @@
+/* ============================================================
+   VIDOR ASSET MANAGER -- Theme Variables
+   To create a custom school theme, override these variables.
+   ============================================================ */
+
+:root {
+  /* Backgrounds */
+  --color-bg:          #0a0a0a;
+  --color-bg-1:        #111111;
+  --color-bg-2:        #141414;
+  --color-bg-3:        #1a1a1a;
+  --color-bg-4:        #222222;
+  --color-bg-hover:    #141414;
+  --color-bg-active:   #1e1e1e;
+
+  /* Borders */
+  --color-border:      #222222;
+  --color-border-2:    #2e2e2e;
+  --color-border-3:    #3a3a3a;
+
+  /* Text */
+  --color-text-primary:    #f0f0f0;
+  --color-text-secondary:  #b0b0b0;
+  --color-text-tertiary:   #888888;
+  --color-text-muted:      #666666;
+  --color-text-faint:      #777777;
+  --color-text-disabled:   #444444;
+
+  /* Accent / Brand */
+  --color-accent:      #ededed;
+  --color-accent-fg:   #000000;
+
+  /* Semantic */
+  --color-success:     #00c853;
+  --color-success-bg:  rgba(0, 200, 83, 0.10);
+  --color-success-bdr: rgba(0, 200, 83, 0.25);
+
+  --color-warning:     #ffab00;
+  --color-warning-bg:  rgba(255, 171, 0, 0.10);
+  --color-warning-bdr: rgba(255, 171, 0, 0.35);
+
+  --color-danger:      #ff6b6b;
+  --color-danger-bg:   rgba(255, 68, 68, 0.12);
+  --color-danger-bdr:  rgba(255, 68, 68, 0.30);
+
+  --color-info:        #2979ff;
+  --color-info-bg:     rgba(41, 121, 255, 0.10);
+  --color-info-bdr:    rgba(41, 121, 255, 0.25);
+
+  --color-purple:      #bb66ff;
+  --color-purple-bg:   rgba(170, 0, 255, 0.10);
+  --color-purple-bdr:  rgba(170, 0, 255, 0.25);
+
+  --color-teal:        #00bcd4;
+  --color-teal-bg:     rgba(0, 188, 212, 0.10);
+  --color-teal-bdr:    rgba(0, 188, 212, 0.25);
+
+  /* Layout */
+  --sidebar-width:     220px;
+  --drawer-width:      460px;
+  --topbar-height:     52px;
+  --statusbar-height:  32px;
+
+  /* Typography */
+  --font-sans:   'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono:   'IBM Plex Mono', monospace;
+
+  /* Radius */
+  --radius-sm:   3px;
+  --radius-md:   4px;
+  --radius-lg:   8px;
+}
