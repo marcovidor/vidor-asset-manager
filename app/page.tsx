@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/auth'
 import type { UserProfile, UserRole } from '@/lib/auth'
 import styles from './styles/app.module.css'
+import { applyTheme, resetTheme, type OrgTheme } from './hooks/useTheme'
 import './styles/theme.css'
 
 type Asset = {
@@ -108,7 +109,13 @@ export default function App() {
       if (!session) { window.location.href = '/login'; return }
       const { data: p } = await supabase.from('user_profiles').select('*').eq('id', session.user.id).single()
       if (!p) { await supabase.auth.signOut(); window.location.href = '/login?error=not_invited'; return }
-      setProfile(p); setAuthLoading(false)
+      setProfile(p)
+      // Apply org theme if user belongs to an org
+      if (p.org_id) {
+        const { data: org } = await supabase.from('organizations').select('theme').eq('id', p.org_id).single()
+        if (org?.theme) applyTheme(org.theme as OrgTheme)
+      }
+      setAuthLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') window.location.href = '/login'
@@ -658,6 +665,10 @@ function UserManagementModal({ onClose }: { onClose:()=>void }) {
             </table>
           )}
         </div>
+        <div style={{ marginTop:24 }}>
+          <div className={styles.sectionLabel}>ORGANIZATIONS</div>
+          <OrgManagement />
+        </div>
         {toast && <div style={{ margin:'0 20px 16px', padding:'8px 14px', background:'var(--color-success-bg)', border:'1px solid var(--color-success-bdr)', borderRadius:'var(--radius-md)', fontSize:12, color:'var(--color-success)', fontFamily:'var(--font-mono)' }}>{toast}</div>}
       </div>
     </div>
@@ -675,5 +686,123 @@ function UserRow({ user, orgs, onUpdate }: { user:UserProfile; orgs:{id:string;n
       <td className={styles.userTableTd}><select value={org} onChange={e=>{ setOrg(e.target.value); setDirty(true) }} className={styles.userSelect}><option value="">None</option>{orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></td>
       <td className={styles.userTableTd}>{dirty && <Btn primary onClick={()=>{ onUpdate(user.id, role, org); setDirty(false) }}>Save</Btn>}</td>
     </tr>
+  )
+}
+
+type Org = { id: string; name: string; theme: OrgTheme }
+
+function OrgManagement() {
+  const [orgs, setOrgs] = useState<Org[]>([])
+  const [editing, setEditing] = useState<Org | null>(null)
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [preview, setPreview] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/orgs').then(r => r.json()).then(d => setOrgs(Array.isArray(d) ? d : []))
+  }, [])
+
+  const save = async () => {
+    if (!editing) return
+    setSaving(true)
+    const method = editing.id ? 'PATCH' : 'POST'
+    const body = editing.id
+      ? { id: editing.id, name: editing.name, theme: editing.theme }
+      : { name: editing.name, theme: editing.theme }
+    const res = await fetch('/api/orgs', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (editing.id) setOrgs(prev => prev.map(o => o.id === data.id ? data : o))
+    else setOrgs(prev => [...prev, data])
+    setEditing(null); setSaving(false)
+    resetTheme()
+  }
+
+  const updateTheme = (key: keyof OrgTheme, val: string) => {
+    if (!editing) return
+    const updated = { ...editing, theme: { ...editing.theme, [key]: val } }
+    setEditing(updated)
+    if (preview) applyTheme(updated.theme)
+  }
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <span style={{ fontSize:11, color:'var(--color-text-tertiary)' }}>{orgs.length} organization{orgs.length!==1?'s':''}</span>
+        <Btn onClick={() => setEditing({ id:'', name:'', theme:{} })}>+ New School</Btn>
+      </div>
+
+      {orgs.map(org => (
+        <div key={org.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--color-border)' }}>
+          <div>
+            <div style={{ color:'var(--color-text-primary)', fontSize:13 }}>{org.name}</div>
+            {org.theme?.accent && (
+              <div style={{ display:'flex', gap:6, marginTop:4, alignItems:'center' }}>
+                <div style={{ width:12, height:12, borderRadius:2, background: org.theme.accent, border:'1px solid var(--color-border-3)' }} />
+                <span style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'var(--color-text-muted)' }}>{org.theme.accent}</span>
+              </div>
+            )}
+          </div>
+          <Btn onClick={() => { setEditing(org); setPreview(false) }}>Edit</Btn>
+        </div>
+      ))}
+
+      {editing && (
+        <div style={{ marginTop:16, background:'var(--color-bg-3)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-md)', padding:16 }}>
+          <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'var(--color-text-tertiary)', letterSpacing:'.06em', marginBottom:12 }}>
+            {editing.id ? 'EDIT ORGANIZATION' : 'NEW ORGANIZATION'}
+          </div>
+
+          <Field label="School Name">
+            <input className={styles.fieldInput} value={editing.name} onChange={e => setEditing({...editing, name: e.target.value})} placeholder="e.g. Lincoln High School" />
+          </Field>
+
+          <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'var(--color-text-tertiary)', letterSpacing:'.06em', marginBottom:10, marginTop:4 }}>THEME</div>
+
+          <div className={styles.fieldGrid}>
+            <Field label="Accent Color">
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <input type="color" value={editing.theme?.accent || '#ededed'} onChange={e => updateTheme('accent', e.target.value)}
+                  style={{ width:36, height:32, padding:2, background:'var(--color-bg-3)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-sm)', cursor:'pointer' }} />
+                <input className={styles.fieldInput} value={editing.theme?.accent || ''} onChange={e => updateTheme('accent', e.target.value)} placeholder="#ededed" style={{ flex:1 }} />
+              </div>
+            </Field>
+            <Field label="Accent Text Color">
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <input type="color" value={editing.theme?.accentFg || '#000000'} onChange={e => updateTheme('accentFg', e.target.value)}
+                  style={{ width:36, height:32, padding:2, background:'var(--color-bg-3)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-sm)', cursor:'pointer' }} />
+                <input className={styles.fieldInput} value={editing.theme?.accentFg || ''} onChange={e => updateTheme('accentFg', e.target.value)} placeholder="#000000" style={{ flex:1 }} />
+              </div>
+            </Field>
+            <Field label="Background">
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <input type="color" value={editing.theme?.bg || '#0a0a0a'} onChange={e => updateTheme('bg', e.target.value)}
+                  style={{ width:36, height:32, padding:2, background:'var(--color-bg-3)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-sm)', cursor:'pointer' }} />
+                <input className={styles.fieldInput} value={editing.theme?.bg || ''} onChange={e => updateTheme('bg', e.target.value)} placeholder="#0a0a0a" style={{ flex:1 }} />
+              </div>
+            </Field>
+            <Field label="Sidebar Background">
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <input type="color" value={editing.theme?.bgSidebar || '#111111'} onChange={e => updateTheme('bgSidebar', e.target.value)}
+                  style={{ width:36, height:32, padding:2, background:'var(--color-bg-3)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-sm)', cursor:'pointer' }} />
+                <input className={styles.fieldInput} value={editing.theme?.bgSidebar || ''} onChange={e => updateTheme('bgSidebar', e.target.value)} placeholder="#111111" style={{ flex:1 }} />
+              </div>
+            </Field>
+          </div>
+
+          <Field label="Logo URL">
+            <input className={styles.fieldInput} value={editing.theme?.logoUrl || ''} onChange={e => updateTheme('logoUrl', e.target.value)} placeholder="https://school.edu/logo.png" />
+          </Field>
+
+          <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:4 }}>
+            <Btn primary onClick={save} disabled={saving || !editing.name}>{saving?'Saving...':'Save'}</Btn>
+            <Btn onClick={() => { setEditing(null); resetTheme() }}>Cancel</Btn>
+            <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', marginLeft:8 }}>
+              <input type="checkbox" checked={preview} onChange={e => { setPreview(e.target.checked); if(e.target.checked) applyTheme(editing.theme); else resetTheme() }} />
+              <span style={{ fontSize:12, color:'var(--color-text-tertiary)' }}>Preview theme</span>
+            </label>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
