@@ -1,41 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { requireAuth, requireEditor, sanitize, sanitizeRecord } from '@/lib/api-auth'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
-const ORG_ID = '00000000-0000-0000-0000-000000000001'
+const DEFAULT_ORG = '00000000-0000-0000-0000-000000000001'
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth()
+  if (!auth.ok) return auth.response
+
   const { searchParams } = new URL(req.url)
-  const org_id = searchParams.get('org_id') || ORG_ID
+  // super_admin can query any org, others are locked to their own
+  const orgId = auth.role === 'super_admin'
+    ? (searchParams.get('org_id') || DEFAULT_ORG)
+    : (auth.orgId || DEFAULT_ORG)
 
-  let query = supabase.from('assets').select('*').eq('org_id', org_id).order('category').order('asset_id')
+  const { data, error } = await auth.supabase
+    .from('assets').select('*').eq('org_id', orgId).order('category').order('asset_id')
 
-  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireEditor()
+  if (!auth.ok) return auth.response
+
   const body = await req.json()
 
   // Batch import
-  if (body.batch) {
-    const { data, error } = await supabase.from('assets').insert(body.batch).select()
+  if (Array.isArray(body.batch)) {
+    const batch = body.batch.map((item: Record<string, unknown>) => ({
+      ...sanitizeRecord(item),
+      org_id: auth.role === 'super_admin' ? (item.org_id || DEFAULT_ORG) : auth.orgId,
+    }))
+    const { data, error } = await auth.supabase.from('assets').insert(batch).select()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)
   }
 
   // Single asset
-  const { org_id, ...rest } = body
-  const { data, error } = await supabase
+  const safe = sanitizeRecord(body)
+  const { data, error } = await auth.supabase
     .from('assets')
-    .insert({ org_id: org_id || ORG_ID, ...rest })
-    .select()
-    .single()
+    .insert({ ...safe, org_id: auth.role === 'super_admin' ? (body.org_id || DEFAULT_ORG) : auth.orgId })
+    .select().single()
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
