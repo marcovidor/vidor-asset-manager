@@ -140,18 +140,10 @@ export default function App() {
         .eq('id', session.user.id)
         .single()
       if (!p) {
-        // Profile missing -- create it
-        const { data: newP } = await supabase
-          .from('user_profiles')
-          .upsert({
-            id: session.user.id,
-            email: session.user.email!,
-            full_name: session.user.user_metadata?.full_name || session.user.email!,
-            role: 'viewer',
-          })
-          .select()
-          .single()
-        setProfile(newP)
+        // No profile = not invited -- sign out and redirect to login
+        await supabase.auth.signOut()
+        window.location.href = '/login?error=not_invited'
+        return
       } else {
         setProfile(p)
       }
