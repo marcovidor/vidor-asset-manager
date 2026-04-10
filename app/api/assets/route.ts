@@ -10,22 +10,9 @@ const ORG_ID = '00000000-0000-0000-0000-000000000001'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const category = searchParams.get('category')
-  const status = searchParams.get('status')
-  const q = searchParams.get('q')
   const org_id = searchParams.get('org_id') || ORG_ID
 
-  let query = supabase
-    .from('assets')
-    .select('*')
-    .eq('org_id', org_id)
-    .order('category')
-    .order('asset_id')
-
-  if (category && category !== 'ALL') query = query.eq('category', category)
-  if (status === 'serial-tbd') query = query.eq('serial', 'TBD')
-  else if (status) query = query.eq('status', status)
-  if (q) query = query.or(`make.ilike.%${q}%,model.ilike.%${q}%,description.ilike.%${q}%,serial.ilike.%${q}%,asset_id.ilike.%${q}%`)
+  let query = supabase.from('assets').select('*').eq('org_id', org_id).order('category').order('asset_id')
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -34,9 +21,19 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
+
+  // Batch import
+  if (body.batch) {
+    const { data, error } = await supabase.from('assets').insert(body.batch).select()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  }
+
+  // Single asset
+  const { org_id, ...rest } = body
   const { data, error } = await supabase
     .from('assets')
-    .insert({ ...body, org_id: ORG_ID })
+    .insert({ org_id: org_id || ORG_ID, ...rest })
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
