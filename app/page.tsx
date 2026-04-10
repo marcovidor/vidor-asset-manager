@@ -137,6 +137,15 @@ export default function App() {
 
   useEffect(() => { if (!authLoading) fetchAssets(activeOrg?.id) }, [authLoading, fetchAssets, activeOrg])
 
+  // Load orgs for switcher once profile is known
+  useEffect(() => {
+    if (profile?.role === 'super_admin') {
+      fetch('/api/orgs').then(r=>r.json()).then(orgs => {
+        setAllOrgs(Array.isArray(orgs) ? orgs : [])
+      })
+    }
+  }, [profile])
+
   useEffect(() => {
     let result = [...assets]
     if (activeCat !== 'ALL') result = result.filter(a => a.category === activeCat)
@@ -255,7 +264,7 @@ export default function App() {
         )}
 
         {/* ORG SWITCHER -- super_admin only */}
-        {profile?.role === 'super_admin' && allOrgs.length > 0 && (
+        {profile?.role === 'super_admin' && (
           <div style={{ padding:'8px 10px', borderBottom:'1px solid var(--color-border)' }}>
             <select
               value={activeOrg?.id || ''}
