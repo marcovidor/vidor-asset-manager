@@ -19,15 +19,15 @@
   --color-border-3:    #3a3a3a;
 
   /* Text */
-  --color-text-primary:    #f0f0f0;
-  --color-text-secondary:  #b0b0b0;
-  --color-text-tertiary:   #888888;
-  --color-text-muted:      #666666;
-  --color-text-faint:      #777777;
-  --color-text-disabled:   #444444;
+  --color-text-primary:    #ffffff;
+  --color-text-secondary:  #e9e9e9;
+  --color-text-tertiary:   #cacaca;
+  --color-text-muted:      #959595;
+  --color-text-faint:      #878686;
+  --color-text-disabled:   #5e5e5e;
 
   /* Accent / Brand */
-  --color-accent:      #ededed;
+  --color-accent:      #ffffff;
   --color-accent-fg:   #000000;
 
   /* Semantic */
