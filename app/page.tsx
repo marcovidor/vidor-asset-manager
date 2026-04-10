@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/auth'
 import type { UserProfile, UserRole } from '@/lib/auth'
 import styles from './styles/app.module.css'
-import { applyTheme, resetTheme, type OrgTheme } from './hooks/useTheme'
+import { fetchOrgTheme, applyTheme, resetTheme, type OrgTheme } from '@/lib/useTheme'
 import './styles/theme.css'
 
 type Asset = {
@@ -94,6 +94,7 @@ export default function App() {
   const [drawerTab, setDrawerTab] = useState<'details'|'checkout'|'maintenance'|'history'>('details')
   const [showAdd, setShowAdd] = useState(false)
   const [showAdmin, setShowAdmin] = useState(false)
+  const [showSchool, setShowSchool] = useState(false)
   const [catSearch, setCatSearch] = useState('')
   const [checkouts, setCheckouts] = useState<Checkout[]>([])
   const [maintenance, setMaintenance] = useState<MaintenanceLog[]>([])
@@ -118,7 +119,7 @@ export default function App() {
       setAuthLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') window.location.href = '/login'
+      if (event === 'SIGNED_OUT') { resetTheme(); window.location.href = '/login' }
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -280,7 +281,8 @@ export default function App() {
 
         {profile && canManageUsers(profile.role) && (
           <div className={styles.sidebarAdminWrap}>
-            <button className={styles.sidebarAdminBtn} onClick={()=>setShowAdmin(true)}>User Management</button>
+            <button className={styles.sidebarAdminBtn} onClick={()=>setShowAdmin(true)} style={{marginBottom:6}}>User Management</button>
+            <button className={styles.sidebarAdminBtn} onClick={()=>setShowSchool(true)}>Onboard School</button>
           </div>
         )}
       </nav>
@@ -409,6 +411,9 @@ export default function App() {
         <UserManagementModal onClose={()=>setShowAdmin(false)} />
       )}
 
+      {showSchool && profile && canManageUsers(profile.role) && (
+        <SchoolModal onClose={()=>setShowSchool(false)} />
+      )}
       {toast && <div className={styles.toast}>{toast}</div>}
     </div>
   )
@@ -693,7 +698,7 @@ type Org = { id: string; name: string; theme: OrgTheme }
 
 function OrgManagement() {
   const [orgs, setOrgs] = useState<Org[]>([])
-  const [editing, setEditing] = useState<Org | null>(null)
+  const [editing, setEditing] = useState<_Org | null>(null)
   const [newName, setNewName] = useState('')
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState(false)
@@ -731,7 +736,7 @@ function OrgManagement() {
         <Btn onClick={() => setEditing({ id:'', name:'', theme:{} })}>+ New School</Btn>
       </div>
 
-      {orgs.map(org => (
+      {orgs.map((org) => (
         <div key={org.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--color-border)' }}>
           <div>
             <div style={{ color:'var(--color-text-primary)', fontSize:13 }}>{org.name}</div>
@@ -803,6 +808,117 @@ function OrgManagement() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ---- SCHOOL ONBOARDING MODAL ----
+
+type _Org = { id: string; name: string; theme: Record<string,string>; logo_url?: string | null }
+
+function SchoolModal({ onClose }: { onClose: () => void }) {
+  const [orgs, setOrgs] = useState<_Org[]>([])
+  const [editing, setEditing] = useState<_Org | null>(null)
+  const [name, setName] = useState('')
+  const [accent, setAccent] = useState('#ededed')
+  const [accentFg, setAccentFg] = useState('#000000')
+  const [bgSidebar, setBgSidebar] = useState('#111111')
+  const [textPrimary, setTextPrimary] = useState('#f0f0f0')
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState('')
+
+  const load = () => fetch('/api/orgs').then(r=>r.json()).then(setOrgs)
+  useEffect(() => { load() }, [])
+
+  const startEdit = (org: _Org) => {
+    setEditing(org as _Org); setName(org.name)
+    setAccent(org.theme?.accent || '#ededed')
+    setAccentFg(org.theme?.accentFg || '#000000')
+    setBgSidebar(org.theme?.bgSidebar || '#111111')
+    setTextPrimary(org.theme?.textPrimary || '#f0f0f0')
+  }
+
+  const save = async () => {
+    setSaving(true)
+    const theme = { accent, accentFg, bgSidebar, textPrimary }
+    const body = editing?.id
+      ? { id: editing.id, name, theme }
+      : { name, theme }
+    const method = editing?.id ? 'PATCH' : 'POST'
+    await fetch('/api/orgs', { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    await load(); setSaving(false); setEditing(null); setName('')
+    setToast(editing?.id ? 'School updated' : 'School created')
+    setTimeout(() => setToast(''), 2500)
+  }
+
+  const preview = () => {
+    applyTheme({ accent, accentFg, bgSidebar, textPrimary })
+    setToast('Preview applied — close to reset')
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  return (
+    <div className={styles.modalOverlay}>
+      <div className={`${styles.modalBox} ${styles.modalBoxWide}`}>
+        <div className={styles.modalHeader}>
+          <span className={styles.modalTitle}>SCHOOL ONBOARDING</span>
+          <button className={styles.drawerClose} onClick={onClose}>&#x2715;</button>
+        </div>
+        <div className={styles.modalBody}>
+
+          {/* Form */}
+          <div className={styles.inviteBox}>
+            <div className={styles.sectionLabel}>{editing?.id ? 'EDIT SCHOOL' : 'NEW SCHOOL'}</div>
+            <Field label="School name">
+              <input className={styles.fieldInput} value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Lincoln High School" />
+            </Field>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:10, marginBottom:14 }}>
+              {[
+                ['Accent color', accent, setAccent],
+                ['Accent text', accentFg, setAccentFg],
+                ['Sidebar bg', bgSidebar, setBgSidebar],
+                ['Primary text', textPrimary, setTextPrimary],
+              ].map(([label, val, setter]) => (
+                <div key={label as string}>
+                  <label className={styles.fieldLabel}>{label as string}</label>
+                  <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                    <input type="color" value={val as string} onChange={e=>(setter as (v:string)=>void)(e.target.value)}
+                      style={{ width:36, height:32, border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-sm)', background:'none', cursor:'pointer', padding:2 }} />
+                    <input className={styles.fieldInput} value={val as string} onChange={e=>(setter as (v:string)=>void)(e.target.value)}
+                      style={{ fontFamily:'var(--font-mono)', fontSize:11 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <Btn onClick={preview}>Preview</Btn>
+              <Btn primary onClick={save} disabled={!name||saving}>{saving?'Saving...': editing?.id?'Update':'Create School'}</Btn>
+              {editing?.id && <Btn onClick={()=>{ setEditing(null); setName('') }}>Cancel</Btn>}
+            </div>
+          </div>
+
+          {/* School list */}
+          <div className={styles.sectionLabel}>SCHOOLS</div>
+          {orgs.length === 0
+            ? <div className={styles.emptyLog}>No schools yet.</div>
+            : orgs.map((org) => (
+              <div key={org.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--color-border)' }}>
+                <div>
+                  <div style={{ color:'var(--color-text-primary)', fontSize:13, fontWeight:500 }}>{org.name}</div>
+                  {org.theme?.accent && (
+                    <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
+                      <div style={{ width:12, height:12, borderRadius:2, background:org.theme.accent, border:'1px solid var(--color-border-2)' }} />
+                      <span style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'var(--color-text-muted)' }}>{org.theme.accent}</span>
+                    </div>
+                  )}
+                </div>
+                <Btn onClick={() => startEdit(org)}>Edit</Btn>
+              </div>
+            ))
+          }
+        </div>
+        {toast && <div style={{ margin:'0 20px 16px', padding:'8px 14px', background:'var(--color-success-bg)', border:'1px solid var(--color-success-bdr)', borderRadius:'var(--radius-md)', fontSize:12, color:'var(--color-success)', fontFamily:'var(--font-mono)' }}>{toast}</div>}
+      </div>
     </div>
   )
 }
