@@ -4,11 +4,10 @@ import { requireAuth, requireEditor, sanitize, sanitizeRecord } from '@/lib/api-
 const DEFAULT_ORG = '00000000-0000-0000-0000-000000000001'
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth()
+  const auth = await requireAuth(req)
   if (!auth.ok) return auth.response
 
   const { searchParams } = new URL(req.url)
-  // super_admin can query any org, others are locked to their own
   const orgId = auth.role === 'super_admin'
     ? (searchParams.get('org_id') || DEFAULT_ORG)
     : (auth.orgId || DEFAULT_ORG)
@@ -21,12 +20,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireEditor()
+  const auth = await requireEditor(req)
   if (!auth.ok) return auth.response
 
   const body = await req.json()
 
-  // Batch import
   if (Array.isArray(body.batch)) {
     const batch = body.batch.map((item: Record<string, unknown>) => ({
       ...sanitizeRecord(item),
@@ -37,7 +35,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data)
   }
 
-  // Single asset
   const safe = sanitizeRecord(body)
   const { data, error } = await auth.supabase
     .from('assets')

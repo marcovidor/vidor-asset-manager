@@ -5,8 +5,8 @@ function toSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-export async function GET() {
-  const auth = await requireSuperAdmin()
+export async function GET(req: NextRequest) {
+  const auth = await requireSuperAdmin(req)
   if (!auth.ok) return auth.response
 
   const { data } = await auth.supabase.from('organizations').select('id,name,slug,theme,logo_url').order('name')
@@ -14,7 +14,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSuperAdmin()
+  const auth = await requireSuperAdmin(req)
   if (!auth.ok) return auth.response
 
   const body = await req.json()
@@ -22,16 +22,14 @@ export async function POST(req: NextRequest) {
   if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
   const { data, error } = await auth.supabase
-    .from('organizations')
-    .insert({ name, slug: toSlug(name), theme: body.theme || {} })
-    .select().single()
+    .from('organizations').insert({ name, slug: toSlug(name), theme: body.theme || {} }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await requireSuperAdmin()
+  const auth = await requireSuperAdmin(req)
   if (!auth.ok) return auth.response
 
   const body = await req.json()

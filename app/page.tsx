@@ -176,14 +176,21 @@ export default function App() {
 
   useEffect(() => {
     if (profile?.role === 'super_admin') {
-      fetch('/api/orgs').then(r=>r.json()).then(orgs => setAllOrgs(Array.isArray(orgs)?orgs:[]))
+      authHeaders().then(hdrs => fetch('/api/orgs', { headers: hdrs }).then(r=>r.json()).then(orgs => setAllOrgs(Array.isArray(orgs)?orgs:[])))
     }
   }, [profile])
+
+  // Auth headers helper -- sends JWT with every API request
+  const authHeaders = useCallback(async (): Promise<HeadersInit> => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session ? { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+  }, [])
 
   const fetchAssets = useCallback(async (orgId?: string) => {
     setLoading(true)
     const url = orgId ? `/api/assets?org_id=${orgId}` : '/api/assets'
-    const res = await fetch(url)
+    const hdrs = await authHeaders()
+    const res = await fetch(url, { headers: hdrs })
     const data = await res.json()
     setAssets(Array.isArray(data) ? data : [])
     setLoading(false)
@@ -212,9 +219,10 @@ export default function App() {
 
   const openDrawer = async (asset: Asset) => {
     setSelectedAsset(asset); setDrawerTab('details')
+    const hdrs = await authHeaders()
     const [co, ml] = await Promise.all([
-      fetch(`/api/checkouts?asset_id=${asset.id}`).then(r=>r.json()),
-      fetch(`/api/maintenance?asset_id=${asset.id}`).then(r=>r.json()),
+      fetch(`/api/checkouts?asset_id=${asset.id}`, { headers: hdrs }).then(r=>r.json()),
+      fetch(`/api/maintenance?asset_id=${asset.id}`, { headers: hdrs }).then(r=>r.json()),
     ])
     setCheckouts(Array.isArray(co)?co:[])
     setMaintenance(Array.isArray(ml)?ml:[])
@@ -223,7 +231,8 @@ export default function App() {
   const saveAsset = async (patch: Partial<Asset>) => {
     if (!selectedAsset || !canEdit(profile?.role)) return
     setSaving(true)
-    const res = await fetch(`/api/assets/${selectedAsset.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch) })
+    const hdrs = await authHeaders()
+    const res = await fetch(`/api/assets/${selectedAsset.id}`, { method:'PATCH', headers:hdrs, body:JSON.stringify(patch) })
     const updated = await res.json()
     setAssets(prev => prev.map(a => a.id===updated.id ? updated : a))
     setSelectedAsset(updated); setSaving(false); showToast('Saved')
@@ -243,31 +252,35 @@ export default function App() {
 
   const checkoutAsset = async (by: string, due: string, notes: string) => {
     if (!selectedAsset || !canEdit(profile?.role)) return
-    await fetch('/api/checkouts', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ asset_id:selectedAsset.id, checked_out_by:by, due_back_at:due||null, notes }) })
+    const hdrs = await authHeaders()
+    await fetch('/api/checkouts', { method:'POST', headers:hdrs, body:JSON.stringify({ asset_id:selectedAsset.id, checked_out_by:by, due_back_at:due||null, notes }) })
     await saveAsset({ status:'checked_out' })
-    const co = await fetch(`/api/checkouts?asset_id=${selectedAsset.id}`).then(r=>r.json())
+    const co = await fetch(`/api/checkouts?asset_id=${selectedAsset.id}`, { headers: await authHeaders() }).then(r=>r.json())
     setCheckouts(Array.isArray(co)?co:[]); showToast('Checked out')
   }
 
   const checkinAsset = async (checkoutId: string) => {
     if (!canEdit(profile?.role)) return
-    await fetch('/api/checkouts', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id:checkoutId, checked_in_at:new Date().toISOString() }) })
+    const hdrs = await authHeaders()
+    await fetch('/api/checkouts', { method:'PATCH', headers:hdrs, body:JSON.stringify({ id:checkoutId, checked_in_at:new Date().toISOString() }) })
     await saveAsset({ status:'active' })
-    const co = await fetch(`/api/checkouts?asset_id=${selectedAsset?.id}`).then(r=>r.json())
+    const co = await fetch(`/api/checkouts?asset_id=${selectedAsset?.id}`, { headers: await authHeaders() }).then(r=>r.json())
     setCheckouts(Array.isArray(co)?co:[]); showToast('Checked in')
   }
 
   const addMaintenance = async (type: string, desc: string, by: string, date: string, cost: string, next: string, notes: string) => {
     if (!selectedAsset || !canEdit(profile?.role)) return
-    await fetch('/api/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ asset_id:selectedAsset.id, type, description:desc, performed_by:by, performed_at:date, cost:cost?parseFloat(cost):null, next_due_at:next||null, notes }) })
-    const ml = await fetch(`/api/maintenance?asset_id=${selectedAsset.id}`).then(r=>r.json())
+    const hdrs = await authHeaders()
+    await fetch('/api/maintenance', { method:'POST', headers:hdrs, body:JSON.stringify({ asset_id:selectedAsset.id, type, description:desc, performed_by:by, performed_at:date, cost:cost?parseFloat(cost):null, next_due_at:next||null, notes }) })
+    const ml = await fetch(`/api/maintenance?asset_id=${selectedAsset.id}`, { headers: await authHeaders() }).then(r=>r.json())
     setMaintenance(Array.isArray(ml)?ml:[]); showToast('Maintenance logged')
   }
 
   const deleteAsset = async () => {
     if (!selectedAsset || !canDelete(profile?.role)) return
     if (!confirm(`Delete ${selectedAsset.make} ${selectedAsset.model}? This cannot be undone.`)) return
-    await fetch(`/api/assets/${selectedAsset.id}`, { method:'DELETE' })
+    const hdrs = await authHeaders()
+    await fetch(`/api/assets/${selectedAsset.id}`, { method:'DELETE', headers:hdrs })
     setAssets(prev => prev.filter(a => a.id !== selectedAsset.id))
     setSelectedAsset(null); showToast('Asset deleted')
   }
@@ -483,7 +496,8 @@ export default function App() {
           prefill={duplicateAsset||undefined}
           onClose={()=>{setShowAdd(false);setDuplicateAsset(null)}}
           onAdd={async(data)=>{
-            await fetch('/api/assets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+            const hdrs = await authHeaders()
+          await fetch('/api/assets',{method:'POST',headers:hdrs,body:JSON.stringify(data)})
             await fetchAssets(activeOrg?.id); setShowAdd(false); setDuplicateAsset(null); showToast('Asset added')
           }} />
       )}
@@ -918,7 +932,8 @@ function CSVImportModal({ orgId, onClose, onImported }: { orgId:string; onClose:
     let count = 0
     for (let i = 0; i < assets.length; i += 50) {
       const batch = assets.slice(i, i+50)
-      await fetch('/api/assets', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ batch }) })
+      const {data:{session}} = await supabase.auth.getSession()
+      await fetch('/api/assets', { method:'POST', headers:{Authorization:`Bearer ${session?.access_token}`,'Content-Type':'application/json'}, body:JSON.stringify({ batch }) })
       count += batch.length
     }
     setImportCount(count); setImporting(false); setStep('done'); onImported()
@@ -1019,13 +1034,14 @@ function UserManagementModal({ onClose }: { onClose:()=>void }) {
 
   useEffect(()=>{
     Promise.all([
-      fetch('/api/users').then(r=>r.json()),
+      supabase.auth.getSession().then(({data:{session}})=>fetch('/api/users',{headers:{Authorization:`Bearer ${session?.access_token}`}}).then(r=>r.json())),
       supabase.from('organizations').select('id,name').then(({data})=>data||[])
     ]).then(([u,o])=>{ setUsers(Array.isArray(u)?u:[]); setOrgs(o); setLoading(false) })
   },[])
 
   const updateUser = async (id:string,role:string,org_id:string) => {
-    await fetch('/api/users',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,role,org_id:org_id||null})})
+    const {data:{session}} = await supabase.auth.getSession()
+    await fetch('/api/users',{method:'PATCH',headers:{Authorization:`Bearer ${session?.access_token}`,'Content-Type':'application/json'},body:JSON.stringify({id,role,org_id:org_id||null})})
     setUsers(prev=>prev.map(u=>u.id===id?{...u,role:role as UserRole,org_id:org_id||null}:u))
     setToast('Updated'); setTimeout(()=>setToast(''),2000)
   }
@@ -1089,7 +1105,7 @@ function SchoolModal({ onClose }: { onClose:()=>void }) {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
 
-  const load = () => fetch('/api/orgs').then(r=>r.json()).then(setOrgs)
+  const load = () => supabase.auth.getSession().then(({data:{session}})=>fetch('/api/orgs',{headers:{Authorization:`Bearer ${session?.access_token}`}}).then(r=>r.json()).then(setOrgs))
   useEffect(()=>{load()},[])
 
   const startEdit = (org: _Org) => {
@@ -1105,7 +1121,8 @@ function SchoolModal({ onClose }: { onClose:()=>void }) {
     const theme = {accent,accentFg,bgSidebar,textPrimary}
     const body = editing?.id ? {id:editing.id,name,theme} : {name,theme}
     const method = editing?.id ? 'PATCH' : 'POST'
-    await fetch('/api/orgs',{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    const {data:{session}} = await supabase.auth.getSession()
+    await fetch('/api/orgs',{method,headers:{Authorization:`Bearer ${session?.access_token}`,'Content-Type':'application/json'},body:JSON.stringify(body)})
     await load(); setSaving(false); setEditing(null); setName('')
     setToast(editing?.id?'School updated':'School created'); setTimeout(()=>setToast(''),2500)
   }
