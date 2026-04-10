@@ -13,11 +13,12 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get('category')
   const status = searchParams.get('status')
   const q = searchParams.get('q')
+  const org_id = searchParams.get('org_id') || ORG_ID
 
   let query = supabase
     .from('assets')
     .select('*')
-    .eq('org_id', ORG_ID)
+    .eq('org_id', org_id)
     .order('category')
     .order('asset_id')
 

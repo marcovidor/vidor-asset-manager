@@ -95,6 +95,8 @@ export default function App() {
   const [showAdd, setShowAdd] = useState(false)
   const [showAdmin, setShowAdmin] = useState(false)
   const [showSchool, setShowSchool] = useState(false)
+  const [activeOrg, setActiveOrg] = useState<{id:string;name:string;theme:Record<string,string>}|null>(null)
+  const [allOrgs, setAllOrgs] = useState<{id:string;name:string;theme:Record<string,string>}[]>([])
   const [catSearch, setCatSearch] = useState('')
   const [checkouts, setCheckouts] = useState<Checkout[]>([])
   const [maintenance, setMaintenance] = useState<MaintenanceLog[]>([])
@@ -124,15 +126,16 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  const fetchAssets = useCallback(async () => {
+  const fetchAssets = useCallback(async (orgId?: string) => {
     setLoading(true)
-    const res = await fetch('/api/assets')
+    const url = orgId ? `/api/assets?org_id=${orgId}` : '/api/assets'
+    const res = await fetch(url)
     const data = await res.json()
     setAssets(Array.isArray(data) ? data : [])
     setLoading(false)
   }, [])
 
-  useEffect(() => { if (!authLoading) fetchAssets() }, [authLoading, fetchAssets])
+  useEffect(() => { if (!authLoading) fetchAssets(activeOrg?.id) }, [authLoading, fetchAssets, activeOrg])
 
   useEffect(() => {
     let result = [...assets]
@@ -251,6 +254,24 @@ export default function App() {
           </div>
         )}
 
+        {/* ORG SWITCHER -- super_admin only */}
+        {profile?.role === 'super_admin' && allOrgs.length > 0 && (
+          <div style={{ padding:'8px 10px', borderBottom:'1px solid var(--color-border)' }}>
+            <select
+              value={activeOrg?.id || ''}
+              onChange={e => {
+                const org = allOrgs.find(o => o.id === e.target.value) || null
+                setActiveOrg(org)
+                if (org?.theme) applyTheme(org.theme)
+                else resetTheme()
+              }}
+              style={{ width:'100%', background:'var(--color-bg-3)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-sm)', padding:'5px 8px', fontSize:11, color:'var(--color-text-primary)', outline:'none', fontFamily:'var(--font-sans)' }}
+            >
+              <option value=''>All orgs (Vidor Media)</option>
+              {allOrgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </div>
+        )}
         <div className={styles.sidebarSearch}>
           <input className={styles.sidebarSearchInput} value={catSearch} onChange={e=>setCatSearch(e.target.value)} placeholder="Filter categories..." />
         </div>
