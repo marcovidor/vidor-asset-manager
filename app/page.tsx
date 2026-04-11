@@ -149,6 +149,7 @@ export default function App() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [voiceState, setVoiceState] = useState<'idle'|'listening'|'processing'|'done'|'error'>('idle')
   const [voiceText, setVoiceText] = useState('')
   const [voiceResult, setVoiceResult] = useState<{summary:string;executed:boolean}|null>(null)
@@ -156,6 +157,13 @@ export default function App() {
   const recognitionRef = useRef<any>(null)
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
+
+  // Theme init -- read from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('vam-theme') || 'dark'
+    const preset = localStorage.getItem('vam-preset') || ''
+    document.documentElement.className = [saved === 'light' ? 'light' : '', preset ? `preset-${preset}` : ''].filter(Boolean).join(' ')
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -345,11 +353,15 @@ export default function App() {
     <div className={styles.app}>
 
       {/* SIDEBAR */}
-      <nav className={styles.sidebar}>
+      <div className={`${styles.sidebarOverlay} ${sidebarOpen?styles.open:''}`} onClick={()=>setSidebarOpen(false)} />
+      <nav className={`${styles.sidebar} ${sidebarOpen?styles.open:''}`}>
         <div className={styles.sidebarHeader}>
           <div className={styles.sidebarLogo}>VIDOR MEDIA</div>
           <div className={styles.sidebarSub}>ASSET REGISTRY</div>
         </div>
+        {/* Mobile close */}
+        <button className={styles.mobileShow} onClick={()=>setSidebarOpen(false)}
+          style={{ position:'absolute', top:12, right:12, background:'none', border:'none', color:'var(--color-text-muted)', fontSize:18, cursor:'pointer', padding:4 }}>✕</button>
 
         {profile && (
           <div className={styles.sidebarUser}>
@@ -381,7 +393,7 @@ export default function App() {
 
         <div className={styles.sidebarScroll}>
           <div className={styles.catSection}>
-            <div onClick={()=>setActiveCat('ALL')} className={`${styles.catItem} ${activeCat==='ALL'?styles.active:''}`}>
+            <div onClick={()=>{setActiveCat('ALL');setSidebarOpen(false)}} className={`${styles.catItem} ${activeCat==='ALL'?styles.active:''}`}>
               <span className={styles.catName}>All Assets</span>
               <span className={styles.catCount}>{assets.length}</span>
             </div>
@@ -393,7 +405,7 @@ export default function App() {
               <div key={group} className={styles.catSection}>
                 <div className={styles.catGroupLabel}>{group}</div>
                 {visible.map(cat=>(
-                  <div key={cat} onClick={()=>setActiveCat(cat)} className={`${styles.catItem} ${activeCat===cat?styles.active:''}`}>
+                  <div key={cat} onClick={()=>{setActiveCat(cat);setSidebarOpen(false)}} className={`${styles.catItem} ${activeCat===cat?styles.active:''}`}>
                     <span className={styles.catName}>{CAT_LABELS[cat]||cat}</span>
                     <span className={styles.catCount}>{catCounts[cat]||0}</span>
                   </div>
@@ -415,6 +427,11 @@ export default function App() {
       {/* MAIN */}
       <div className={styles.main}>
         <div className={styles.topbar}>
+          {/* Mobile hamburger */}
+          <button className={styles.mobileShow} onClick={()=>setSidebarOpen(true)}
+            style={{ background:'none', border:'none', color:'var(--color-text-tertiary)', fontSize:20, cursor:'pointer', padding:4, flexShrink:0 }}>
+            ☰
+          </button>
           <span className={styles.topbarTitle}>{activeCat==='ALL'?'All Assets':(CAT_LABELS[activeCat]||activeCat)}</span>
           <div className={styles.topbarDivider} />
           <input className={styles.searchInput} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search make, model, serial, description, ID..." />
@@ -550,6 +567,21 @@ export default function App() {
             await fetchAssets(activeOrg?.id); setShowAdd(false); setDuplicateAsset(null); showToast('Asset added')
           }} />
       )}
+      {/* BOTTOM NAV (mobile only) */}
+      <div className={styles.bottomNav}>
+        {[
+          { icon:'📋', label:'Assets', action:()=>{ setActiveCat('ALL'); setSidebarOpen(false) } },
+          { icon:'🔍', label:'Search', action:()=>{ document.querySelector<HTMLInputElement>('input[placeholder*="Search"]')?.focus() } },
+          { icon:'🎤', label:'Voice', action: voiceState==='listening'?stopVoice:startVoice, active: voiceState==='listening' },
+          { icon:'⚙', label:'Admin', action:()=>{ window.location.href='/admin' } },
+        ].map(item => (
+          <button key={item.label} className={`${styles.bottomNavItem} ${item.active?styles.active:''}`} onClick={item.action}>
+            <span>{item.icon}</span>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* VOICE OVERLAY */}
       {voiceState !== 'idle' && (
         <div style={{ position:'fixed', bottom:72, left:'50%', transform:'translateX(-50%)', zIndex:999, minWidth:320, maxWidth:'90vw', background:'var(--color-bg-1)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-lg)', padding:'16px 20px', boxShadow:'0 8px 32px rgba(0,0,0,.4)' }}>

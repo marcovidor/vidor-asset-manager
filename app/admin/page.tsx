@@ -39,7 +39,7 @@ function Btn({ onClick, primary, children, disabled }: { onClick:()=>void; prima
 export default function AdminPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeSection, setActiveSection] = useState<'users'|'schools'|'import'|'serials'>('users')
+  const [activeSection, setActiveSection] = useState<'users'|'schools'|'import'|'serials'|'appearance'>('users')
   const [toast, setToast] = useState('')
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
@@ -64,6 +64,7 @@ export default function AdminPage() {
     { id:'schools', label:'Schools',         icon:'🏫' },
     { id:'import',  label:'Import / Export', icon:'⇅' },
     { id:'serials', label:'Bulk Serials',    icon:'#' },
+    { id:'appearance', label:'Appearance',      icon:'🎨' },
   ] as const
 
   return (
@@ -104,6 +105,7 @@ export default function AdminPage() {
           {activeSection === 'schools' && <SchoolsSection onToast={showToast} />}
           {activeSection === 'import'  && <ImportExportSection onToast={showToast} />}
           {activeSection === 'serials' && <BulkSerialsSection onToast={showToast} />}
+          {activeSection === 'appearance' && <AppearanceSection onToast={showToast} />}
         </div>
       </div>
 
@@ -533,6 +535,116 @@ function BulkSerialsSection({ onToast }: { onToast:(m:string)=>void }) {
           </Btn>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ---- SECTION: APPEARANCE ----
+const PRESETS = [
+  { id:'dark',     label:'Default Dark',   class:'',                bg:'#0a0a0a', accent:'#ededed' },
+  { id:'midnight', label:'Midnight Blue',  class:'preset-midnight', bg:'#0a0e1a', accent:'#4d8ef0' },
+  { id:'warm',     label:'Warm Dark',      class:'preset-warm',     bg:'#120e0a', accent:'#e8834a' },
+  { id:'contrast', label:'High Contrast',  class:'preset-contrast', bg:'#000000', accent:'#ffffff' },
+  { id:'light',    label:'Light',          class:'light',           bg:'#f5f5f5', accent:'#111111' },
+]
+
+function AppearanceSection({ onToast }: { onToast:(m:string)=>void }) {
+  const [mode, setMode] = useState(() => localStorage.getItem('vam-theme') || 'dark')
+  const [preset, setPreset] = useState(() => localStorage.getItem('vam-preset') || '')
+  const [customAccent, setCustomAccent] = useState(() => localStorage.getItem('vam-custom-accent') || '#ededed')
+  const [customBg, setCustomBg] = useState(() => localStorage.getItem('vam-custom-bg') || '#0a0a0a')
+  const [customAccentFg, setCustomAccentFg] = useState(() => localStorage.getItem('vam-custom-accent-fg') || '#000000')
+
+  const applyThemeClass = (newMode: string, newPreset: string) => {
+    const classes = []
+    if (newMode === 'light') classes.push('light')
+    else if (newPreset) classes.push(`preset-${newPreset}`)
+    document.documentElement.className = classes.join(' ')
+  }
+
+  const applyCustom = () => {
+    document.documentElement.className = ''
+    document.documentElement.style.setProperty('--color-bg', customBg)
+    document.documentElement.style.setProperty('--color-accent', customAccent)
+    document.documentElement.style.setProperty('--color-accent-fg', customAccentFg)
+    document.documentElement.style.setProperty('--color-bg-1', customBg + 'ee')
+    localStorage.setItem('vam-theme', 'custom')
+    localStorage.setItem('vam-custom-accent', customAccent)
+    localStorage.setItem('vam-custom-bg', customBg)
+    localStorage.setItem('vam-custom-accent-fg', customAccentFg)
+    onToast('Custom theme applied')
+  }
+
+  const selectPreset = (p: typeof PRESETS[0]) => {
+    const newMode = p.class === 'light' ? 'light' : 'dark'
+    const newPreset = p.class === 'light' ? '' : p.id === 'dark' ? '' : p.id
+    setMode(newMode); setPreset(newPreset)
+    applyThemeClass(newMode, newPreset)
+    localStorage.setItem('vam-theme', newMode)
+    localStorage.setItem('vam-preset', newPreset)
+    // Clear any custom inline styles
+    ;['--color-bg','--color-accent','--color-accent-fg','--color-bg-1'].forEach(v => document.documentElement.style.removeProperty(v))
+    onToast(`${p.label} theme applied`)
+  }
+
+  return (
+    <div>
+      <h2 style={{ fontSize:18, fontWeight:500, color:'var(--color-text-primary)', marginBottom:4 }}>Appearance</h2>
+      <p style={{ fontSize:13, color:'var(--color-text-tertiary)', marginBottom:28 }}>Customize the look and feel of the registry.</p>
+
+      {/* Presets */}
+      <div style={{ background:'var(--color-bg-2)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-md)', padding:20, marginBottom:20 }}>
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:10, letterSpacing:'.08em', color:'var(--color-text-muted)', marginBottom:16 }}>THEMES</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:10 }}>
+          {PRESETS.map(p => {
+            const isActive = p.id === 'dark' ? (mode==='dark'&&!preset&&localStorage.getItem('vam-theme')!=='custom') : p.id === 'light' ? mode==='light' : preset===p.id
+            return (
+              <button key={p.id} onClick={()=>selectPreset(p)}
+                style={{ padding:'14px 12px', background: isActive ? 'var(--color-bg-active)' : 'var(--color-bg-3)', border:`1px solid ${isActive ? 'var(--color-accent)' : 'var(--color-border-2)'}`, borderRadius:'var(--radius-md)', cursor:'pointer', textAlign:'left', transition:'all .15s' }}>
+                <div style={{ width:'100%', height:32, borderRadius:4, background:p.bg, marginBottom:8, display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid rgba(255,255,255,.1)' }}>
+                  <div style={{ width:16, height:16, borderRadius:3, background:p.accent }} />
+                </div>
+                <div style={{ fontSize:12, fontWeight:500, color:'var(--color-text-primary)' }}>{p.label}</div>
+                {isActive && <div style={{ fontSize:10, color:'var(--color-accent)', fontFamily:'var(--font-mono)', marginTop:2 }}>ACTIVE</div>}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Custom */}
+      <div style={{ background:'var(--color-bg-2)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-md)', padding:20 }}>
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:10, letterSpacing:'.08em', color:'var(--color-text-muted)', marginBottom:16 }}>CUSTOM THEME</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:16 }}>
+          {([
+            ['Background', customBg, setCustomBg],
+            ['Accent color', customAccent, setCustomAccent],
+            ['Accent text', customAccentFg, setCustomAccentFg],
+          ] as [string, string, (v:string)=>void][]).map(([label, val, setter]) => (
+            <div key={label}>
+              <label style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'var(--color-text-muted)', letterSpacing:'.06em', display:'block', marginBottom:6 }}>{label.toUpperCase()}</label>
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <input type="color" value={val} onChange={e=>setter(e.target.value)}
+                  style={{ width:36, height:36, border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-sm)', background:'none', cursor:'pointer', padding:2 }} />
+                <input value={val} onChange={e=>setter(e.target.value)}
+                  style={{ flex:1, background:'var(--color-bg-3)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-sm)', padding:'6px 10px', fontSize:12, color:'var(--color-text-primary)', outline:'none', fontFamily:'var(--font-mono)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Preview swatch */}
+        <div style={{ display:'flex', gap:10, alignItems:'center', padding:'12px 14px', borderRadius:'var(--radius-md)', background:customBg, border:'1px solid rgba(255,255,255,.1)', marginBottom:14 }}>
+          <div style={{ width:28, height:28, borderRadius:4, background:customAccent, flexShrink:0 }} />
+          <div>
+            <div style={{ fontSize:13, fontWeight:500, color:customAccentFg, background:customAccent, padding:'2px 8px', borderRadius:3, display:'inline-block', marginBottom:4 }}>Preview</div>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.5)' }}>Background preview</div>
+          </div>
+        </div>
+        <button onClick={applyCustom}
+          style={{ padding:'8px 16px', background:'var(--color-accent)', color:'var(--color-accent-fg)', border:'none', borderRadius:'var(--radius-md)', fontSize:13, fontWeight:500, cursor:'pointer' }}>
+          Apply Custom Theme
+        </button>
+      </div>
     </div>
   )
 }
