@@ -149,6 +149,11 @@ export default function App() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [voiceState, setVoiceState] = useState<'idle'|'listening'|'processing'|'done'|'error'>('idle')
+  const [voiceText, setVoiceText] = useState('')
+  const [voiceResult, setVoiceResult] = useState<{summary:string;executed:boolean}|null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -294,6 +299,46 @@ export default function App() {
   const pageItems = perPage === 0 ? filtered : filtered.slice((page-1)*effectivePerPage, page*effectivePerPage)
   const tbdCount = assets.filter(a => a.serial==='TBD'||!a.serial).length
 
+
+  const startVoice = async () => {
+    if (typeof window === 'undefined') return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) { showToast('Voice not supported in this browser. Try Safari on iPhone.'); return }
+    const recognition = new SR()
+    recognitionRef.current = recognition
+    recognition.lang = 'en-US'
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+    recognition.onstart = () => setVoiceState('listening')
+    recognition.onresult = async (e: { results: { [key: number]: { [key: number]: { transcript: string } } } }) => {
+      const text = e.results[0][0].transcript
+      setVoiceText(text)
+      setVoiceState('processing')
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/voice', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        })
+        const data = await res.json()
+        setVoiceResult({ summary: data.action?.summary || 'No response', executed: !!data.executed })
+        setVoiceState('done')
+        if (data.executed) {
+          setTimeout(() => fetchAssets(activeOrg?.id), 500)
+          setTimeout(() => { setVoiceState('idle'); setVoiceText(''); setVoiceResult(null) }, 4000)
+        }
+      } catch {
+        setVoiceState('error')
+      }
+    }
+    recognition.onerror = () => setVoiceState('error')
+    recognition.start()
+  }
+
+  const stopVoice = () => { recognitionRef.current?.stop(); setVoiceState('idle') }
+
   if (authLoading) return <div className={styles.emptyState} style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>Loading...</div>
 
   return (
@@ -384,6 +429,19 @@ export default function App() {
           </select>
           <div className={styles.topbarSpacer} />
           {canEdit(profile?.role) && <button className={styles.btnPrimary} onClick={()=>setShowAdd(true)}>+ Add Asset</button>}
+          <button
+            onClick={voiceState==='listening'?stopVoice:startVoice}
+            title="Voice command"
+            style={{
+              width:36, height:36, borderRadius:'50%', border:'none', cursor:'pointer', flexShrink:0,
+              background: voiceState==='listening' ? 'var(--color-danger)' : voiceState==='processing' ? 'var(--color-warning)' : voiceState==='done' ? 'var(--color-success)' : 'var(--color-bg-3)',
+              color: voiceState==='idle' ? 'var(--color-text-tertiary)' : '#fff',
+              fontSize:16, display:'flex', alignItems:'center', justifyContent:'center',
+              boxShadow: voiceState==='listening' ? '0 0 0 4px rgba(255,68,68,.2)' : 'none',
+              transition:'all .2s'
+            }}>
+            {voiceState==='listening' ? '⏹' : voiceState==='processing' ? '⋯' : voiceState==='done' ? '✓' : '🎤'}
+          </button>
         </div>
 
         <div className={styles.tableWrap}>
@@ -491,6 +549,30 @@ export default function App() {
           await fetch('/api/assets',{method:'POST',headers:hdrs,body:JSON.stringify(data)})
             await fetchAssets(activeOrg?.id); setShowAdd(false); setDuplicateAsset(null); showToast('Asset added')
           }} />
+      )}
+      {/* VOICE OVERLAY */}
+      {voiceState !== 'idle' && (
+        <div style={{ position:'fixed', bottom:72, left:'50%', transform:'translateX(-50%)', zIndex:999, minWidth:320, maxWidth:'90vw', background:'var(--color-bg-1)', border:'1px solid var(--color-border-2)', borderRadius:'var(--radius-lg)', padding:'16px 20px', boxShadow:'0 8px 32px rgba(0,0,0,.4)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: voiceText ? 10 : 0 }}>
+            <div style={{ width:8, height:8, borderRadius:'50%', background: voiceState==='listening'?'var(--color-danger)':voiceState==='processing'?'var(--color-warning)':'var(--color-success)', flexShrink:0, animation: voiceState==='listening'?'pulse 1s infinite':undefined }} />
+            <span style={{ fontSize:12, color:'var(--color-text-tertiary)', fontFamily:'var(--font-mono)', letterSpacing:'.06em' }}>
+              {voiceState==='listening'?'LISTENING...':voiceState==='processing'?'PROCESSING...':voiceState==='done'?'DONE':'ERROR'}
+            </span>
+            <div style={{ flex:1 }} />
+            <button onClick={()=>{stopVoice();setVoiceState('idle');setVoiceText('');setVoiceResult(null)}} style={{ background:'none', border:'none', color:'var(--color-text-muted)', cursor:'pointer', fontSize:14 }}>✕</button>
+          </div>
+          {voiceText && <div style={{ fontSize:13, color:'var(--color-text-secondary)', marginBottom: voiceResult ? 10 : 0, fontStyle:'italic' }}>"{voiceText}"</div>}
+          {voiceResult && (
+            <div style={{ fontSize:13, color: voiceResult.executed ? 'var(--color-success)' : 'var(--color-text-primary)', padding:'8px 12px', background: voiceResult.executed ? 'var(--color-success-bg)' : 'var(--color-bg-3)', borderRadius:'var(--radius-md)', border:`1px solid ${voiceResult.executed ? 'var(--color-success-bdr)' : 'var(--color-border-2)'}` }}>
+              {voiceResult.summary}
+              {!voiceResult.executed && (
+                <div style={{ marginTop:8 }}>
+                  <button onClick={startVoice} className={styles.btn} style={{ fontSize:11 }}>Try again</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
       {toast && <div className={styles.toast}>{toast}</div>}
     </div>
