@@ -150,6 +150,7 @@ export default function App() {
   const [toast, setToast] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const [voiceState, setVoiceState] = useState<'idle'|'listening'|'processing'|'done'|'error'>('idle')
   const [voiceText, setVoiceText] = useState('')
   const [voiceResult, setVoiceResult] = useState<{summary:string;executed:boolean}|null>(null)
@@ -157,6 +158,14 @@ export default function App() {
   const recognitionRef = useRef<any>(null)
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
+
+  // Mobile detection
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // Theme init -- read from localStorage on mount
   useEffect(() => {
@@ -350,18 +359,30 @@ export default function App() {
   if (authLoading) return <div className={styles.emptyState} style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>Loading...</div>
 
   return (
-    <div className={styles.app}>
+    <div className={styles.app} style={{ position:'relative' }}>
+
+      {/* SIDEBAR OVERLAY (mobile) */}
+      {isMobile && sidebarOpen && (
+        <div onClick={()=>setSidebarOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', zIndex:199 }} />
+      )}
 
       {/* SIDEBAR */}
-      <div className={`${styles.sidebarOverlay} ${sidebarOpen?styles.open:''}`} onClick={()=>setSidebarOpen(false)} />
-      <nav className={`${styles.sidebar} ${sidebarOpen?styles.open:''}`}>
+      <nav className={styles.sidebar} style={ isMobile ? {
+        position:'fixed', left:0, top:0, bottom:0, zIndex:200,
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition:'transform .25s ease',
+        boxShadow: sidebarOpen ? '4px 0 24px rgba(0,0,0,.5)' : 'none',
+        width:280, minWidth:280,
+      } : {} }>
         <div className={styles.sidebarHeader}>
           <div className={styles.sidebarLogo}>VIDOR MEDIA</div>
           <div className={styles.sidebarSub}>ASSET REGISTRY</div>
         </div>
         {/* Mobile close */}
-        <button className={styles.mobileShow} onClick={()=>setSidebarOpen(false)}
-          style={{ position:'absolute', top:12, right:12, background:'none', border:'none', color:'var(--color-text-muted)', fontSize:18, cursor:'pointer', padding:4 }}>✕</button>
+        {isMobile && (
+          <button onClick={()=>setSidebarOpen(false)}
+            style={{ position:'absolute', top:12, right:12, background:'none', border:'none', color:'var(--color-text-muted)', fontSize:18, cursor:'pointer', padding:4 }}>✕</button>
+        )}
 
         {profile && (
           <div className={styles.sidebarUser}>
@@ -425,15 +446,16 @@ export default function App() {
       </nav>
 
       {/* MAIN */}
-      <div className={styles.main}>
+      <div className={styles.main} style={isMobile?{paddingBottom:60}:{}}>
         <div className={styles.topbar}>
           {/* Mobile hamburger */}
-          <button className={styles.mobileShow} onClick={()=>setSidebarOpen(true)}
-            style={{ background:'none', border:'none', color:'var(--color-text-tertiary)', fontSize:20, cursor:'pointer', padding:4, flexShrink:0 }}>
-            ☰
-          </button>
-          <span className={styles.topbarTitle}>{activeCat==='ALL'?'All Assets':(CAT_LABELS[activeCat]||activeCat)}</span>
-          <div className={styles.topbarDivider} />
+          {isMobile && <button onClick={()=>setSidebarOpen(true)}
+              style={{ background:'none', border:'none', color:'var(--color-text-tertiary)', fontSize:22, cursor:'pointer', padding:'4px 8px', flexShrink:0, minWidth:44, minHeight:44, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              ☰
+            </button>
+          }
+          {!isMobile && <span className={styles.topbarTitle}>{activeCat==='ALL'?'All Assets':(CAT_LABELS[activeCat]||activeCat)}</span>}
+          {!isMobile && <div className={styles.topbarDivider} />}
           <input className={styles.searchInput} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search make, model, serial, description, ID..." />
           <select className={styles.statusSelect} value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
             <option value=''>All statuses</option>
@@ -446,7 +468,7 @@ export default function App() {
           </select>
           <div className={styles.topbarSpacer} />
           {canEdit(profile?.role) && <button className={styles.btnPrimary} onClick={()=>setShowAdd(true)}>+ Add Asset</button>}
-          <button
+          {!isMobile && <button
             onClick={voiceState==='listening'?stopVoice:startVoice}
             title="Voice command"
             style={{
@@ -458,7 +480,7 @@ export default function App() {
               transition:'all .2s'
             }}>
             {voiceState==='listening' ? '⏹' : voiceState==='processing' ? '⋯' : voiceState==='done' ? '✓' : '🎤'}
-          </button>
+          </button>}
         </div>
 
         <div className={styles.tableWrap}>
@@ -470,8 +492,9 @@ export default function App() {
             <table className={styles.table}>
               <thead className={styles.tableThead}>
                 <tr>
-                  {([['asset_id','ID'],['category_label','Category'],['make','Make'],['model','Model'],['description','Description',false],['serial','Serial'],['location','Location'],['status','Status']] as [keyof Asset,string,boolean?][]).map(([col,label,sortable=true])=>(
+                  {([['asset_id','ID',true,true],['category_label','Category',true,true],['make','Make',true,false],['model','Model',true,false],['description','Description',false,true],['serial','Serial',true,true],['location','Location',true,true],['status','Status',true,false]] as [keyof Asset,string,boolean,boolean][]).map(([col,label,sortable=true,hideOnMobile=false])=>(
                     <th key={col} className={`${styles.tableTh} ${sortCol===col?styles.sorted:''}`}
+                      style={ isMobile && hideOnMobile ? { display:'none' } : {} }
                       onClick={sortable?()=>{ if(sortCol===col) setSortDir(d=>d*-1); else { setSortCol(col); setSortDir(1) } }:undefined}>
                       {label}{sortable&&(sortCol===col?(sortDir>0?' ↑':' ↓'):' ↕')}
                     </th>
@@ -489,13 +512,13 @@ export default function App() {
                         </tr>
                       )}
                       <tr key={asset.id} className={`${styles.tableTr} ${selectedAsset?.id===asset.id?styles.selected:''}`} onClick={()=>openDrawer(asset)}>
-                        <td className={`${styles.tableTd} ${styles.tdId}`}>{asset.asset_id}</td>
-                        <td className={`${styles.tableTd} ${styles.tdCategory}`}>{asset.category_label}</td>
+                        <td className={`${styles.tableTd} ${styles.tdId}`} style={isMobile?{display:'none'}:{}}>{asset.asset_id}</td>
+                        <td className={`${styles.tableTd} ${styles.tdCategory}`} style={isMobile?{display:'none'}:{}}>{asset.category_label}</td>
                         <td className={`${styles.tableTd} ${styles.tdMake}`}>{asset.make||'—'}</td>
                         <td className={`${styles.tableTd} ${styles.tdModel}`}>{asset.model||'—'}</td>
-                        <td className={`${styles.tableTd} ${styles.tdDesc}`} title={asset.description}>{asset.description}</td>
-                        <td className={`${styles.tableTd} ${(asset.serial==='TBD'||!asset.serial)?styles.tdSerialTbd:styles.tdSerialOk}`}>{asset.serial||'TBD'}</td>
-                        <td className={`${styles.tableTd} ${styles.tdLocation}`}>{asset.location||'—'}</td>
+                        <td className={`${styles.tableTd} ${styles.tdDesc}`} title={asset.description} style={isMobile?{display:'none'}:{}}>{asset.description}</td>
+                        <td className={`${styles.tableTd} ${(asset.serial==='TBD'||!asset.serial)?styles.tdSerialTbd:styles.tdSerialOk}`} style={isMobile?{display:'none'}:{}}>{asset.serial||'TBD'}</td>
+                        <td className={`${styles.tableTd} ${styles.tdLocation}`} style={isMobile?{display:'none'}:{}}>{asset.location||'—'}</td>
                         <td className={styles.tableTd}><Badge status={asset.status} /></td>
                       </tr>
                     </>
@@ -527,7 +550,7 @@ export default function App() {
       {selectedAsset && profile && (
         <>
           <div className={styles.overlay} onClick={()=>setSelectedAsset(null)} />
-          <div className={styles.drawer}>
+          <div className={styles.drawer} style={isMobile?{width:'100vw',maxWidth:'100vw'}:{}}>
             <div className={styles.drawerHeader}>
               <div>
                 <div className={styles.drawerAssetId}>{selectedAsset.asset_id} · {selectedAsset.category_label}</div>
@@ -568,19 +591,19 @@ export default function App() {
           }} />
       )}
       {/* BOTTOM NAV (mobile only) */}
-      <div className={styles.bottomNav}>
+      {isMobile && <div style={{ position:'fixed', bottom:0, left:0, right:0, height:60, background:'var(--color-bg-1)', borderTop:'1px solid var(--color-border)', zIndex:150, display:'flex', alignItems:'stretch' }}>
         {[
           { icon:'📋', label:'Assets', action:()=>{ setActiveCat('ALL'); setSidebarOpen(false) } },
           { icon:'🔍', label:'Search', action:()=>{ document.querySelector<HTMLInputElement>('input[placeholder*="Search"]')?.focus() } },
           { icon:'🎤', label:'Voice', action: voiceState==='listening'?stopVoice:startVoice, active: voiceState==='listening' },
           { icon:'⚙', label:'Admin', action:()=>{ window.location.href='/admin' } },
         ].map(item => (
-          <button key={item.label} className={`${styles.bottomNavItem} ${item.active?styles.active:''}`} onClick={item.action}>
+          <button key={item.label} onClick={item.action} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, fontSize:10, fontFamily:'var(--font-mono)', letterSpacing:'.04em', color: item.active ? 'var(--color-accent)' : 'var(--color-text-muted)', cursor:'pointer', border:'none', background:'none', padding:0, minHeight:44 }}>
             <span>{item.icon}</span>
             <span>{item.label}</span>
           </button>
         ))}
-      </div>
+      </div>}
 
       {/* VOICE OVERLAY */}
       {voiceState !== 'idle' && (
